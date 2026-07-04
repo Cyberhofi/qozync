@@ -23,16 +23,16 @@ Downloading your own purchases works even without an active streaming subscripti
 - 🏷️ **Tagged & organized** — `Artist/Album (Year)/01 - Title.flac` with embedded cover art
 - 🖥️ **Web UI** — dashboard, searchable library, live activity, logs, settings
 - 📺 **Jellyfin integration** — one library scan per sync that adds files
-- 🔐 **Safe credentials** — password used once to mint a token; secrets encrypted at rest;
-  UI behind an admin password
+- 🔐 **Safe credentials** — connect with a browser auth token (no password stored);
+  secrets encrypted at rest; UI behind an admin password
 - 🐳 **Docker-first** — one container, two volumes
 
 ## Quick start (Docker)
 
 ```bash
-git clone <this repo> qobuz-sync && cd qobuz-sync
-cp .env.example .env        # optional: set SECRET_KEY and TZ
-docker compose up -d
+git clone https://github.com/Cyberhofi/qozync.git && cd qozync
+cp .env.example .env        # optional: set TZ, or a fixed SECRET_KEY
+docker compose up -d --build
 ```
 
 Open <http://localhost:8080>:
@@ -44,45 +44,50 @@ Open <http://localhost:8080>:
 
 ## Deploy to a Linux server
 
-Build the image **on the server** (native to its CPU architecture). You only need
-Docker with the Compose plugin installed.
-
-**1. Copy the project to the server** (from your Windows dev machine). You only
-need the source — not `.venv/`, `config/`, or `music/`:
+Recommended: **clone the repo on the server and build there** — the image is built
+native to the server's CPU architecture (matters on ARM boxes like a Raspberry Pi).
+You only need Docker with the Compose plugin installed.
 
 ```bash
-# via rsync (Git Bash / WSL / any shell with ssh):
+git clone https://github.com/Cyberhofi/qozync.git /opt/qobuz-sync
+cd /opt/qobuz-sync
+cp .env.example .env            # optional — see the SECRET_KEY note below
+# (optional) point /music at a real disk by editing docker-compose.yml, e.g.:
+#   - /srv/media/music:/music
+docker compose up -d --build
+docker compose logs -f          # watch it boot; Ctrl-C to stop watching
+```
+
+Then open `http://<server-ip>:8080`, set an admin password, connect with a fresh
+auth token (see below), and hit **Sync now**. You start clean on the server — no
+need to copy anything from your dev machine.
+
+**Updating later:** `git pull && docker compose up -d --build`. Your `config/`
+(token, DB) and `music/` volumes survive updates.
+
+**Private repo?** The server needs read access. Simplest over HTTPS:
+`git clone https://<user>:<token>@github.com/Cyberhofi/qozync.git` — or add a
+read-only **deploy key** to the repo. A public repo clones as-is.
+
+**No git on the server?** Copy the source directly instead (skip `.venv/`,
+`config/`, `music/`):
+
+```bash
 rsync -av --exclude='.venv' --exclude='config' --exclude='music' \
       --exclude='__pycache__' --exclude='.git' \
-      /c/Claude/Qobuz/  user@server:/opt/qobuz-sync/
+      ./  user@server:/opt/qobuz-sync/
 ```
 
-Or push to a git repo and `git clone` it on the server, or `scp -r` the folder.
-The files that matter: `app/`, `pyproject.toml`, `Dockerfile`, `docker-compose.yml`.
+### About `SECRET_KEY`
 
-**2. On the server**, set a persistent encryption key and choose where music lands:
+It's **optional**. If unset, a key is generated into `config/secret.key` on first
+run and — because `./config` is a persisted volume — your encrypted token survives
+restarts and rebuilds. Set it explicitly only if you'd rather the key live in
+`.env` (e.g. so you can back it up separately):
 
 ```bash
-cd /opt/qobuz-sync
-cp .env.example .env
-echo "SECRET_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> .env
-# edit docker-compose.yml volumes if you want music on a specific disk, e.g.:
-#   - /srv/media/music:/music
+echo "SECRET_KEY=$(openssl rand -base64 32 | tr '+/' '-_')" >> .env
 ```
-
-Setting `SECRET_KEY` in `.env` matters: it lets stored secrets (your Qobuz token,
-Jellyfin key) survive container re-creation and image updates.
-
-**3. Build and start:**
-
-```bash
-docker compose up -d --build
-docker compose logs -f          # watch it boot
-```
-
-**4. Open it** at `http://<server-ip>:8080`, set an admin password, and connect
-with a fresh auth token (grab a new one from your browser — see below). Then
-**Sync now**. You start clean on the server; no need to copy your dev `config/`.
 
 ### Notes for server deployments
 
@@ -98,8 +103,6 @@ with a fresh auth token (grab a new one from your browser — see below). Then
 - **Jellyfin on the same host** — use the container/service name or host IP that's
   reachable from *inside* this container (e.g. `http://jellyfin:8096` if on the
   same Docker network, not `localhost`).
-- **Updating later** — re-copy the source (or `git pull`) and run
-  `docker compose up -d --build` again. Your `config/` and `music/` volumes persist.
 - **Auto-start on boot** — `restart: unless-stopped` is already set, so the
   container comes back after a reboot as long as the Docker service is enabled
   (`sudo systemctl enable docker`).
@@ -129,13 +132,14 @@ Downloads land in `./music`; state lives in `./config` (SQLite DB + encryption k
 |------|-----------|
 | Get app credentials | scraped from the public web-player bundle (override in Settings) |
 | Authenticate | browser `user_auth_token` (validated via `user/get`) |
-| List purchases | `purchase/getUserPurchases` (albums expanded via `album/get`) |
+| List purchases | `purchase/getUserPurchasesIds` → `album/get` + `track/get` |
 | Resolve download | `track/getFileUrl` (MD5-signed with the app secret) |
 | Save | stream file → tag with `mutagen` → organize |
 
-The engine diffs the purchase list against a local SQLite catalog, so re-runs only
-fetch new purchases. A track Qobuz serves as a sample (not owned) is marked
-`skipped` and not retried.
+The engine takes `getUserPurchasesIds` as the source of truth (albums + track ids),
+expands albums to their tracks, fetches standalone track purchases, and diffs the
+result against a local SQLite catalog — so re-runs only download what's missing. A
+track Qobuz serves as a sample (not owned) is marked `skipped` and not retried.
 
 ## Configuration
 
@@ -179,8 +183,10 @@ pytest
 ```
 app/
   qobuz/     bundle credential extraction, API client, JSON models
-  sync/      engine (diff + download), downloader (tag/organize), scheduler, jellyfin
+  sync/      engine (enumerate + diff + download), downloader (tag/organize),
+             scheduler, jellyfin notifier
   web/       FastAPI routes, Jinja templates, admin-password gate
-  db.py      SQLAlchemy models + secret encryption
-tests/       signing, path building, bundle parsing, model parsing
+  config.py  typed settings store   ·   db.py  SQLAlchemy models + encryption
+  paths.py   config/music dirs + key   ·   applog.py  logging to stdout + DB
+tests/       signing, path building, bundle parsing, model parsing, purchase enumeration
 ```
