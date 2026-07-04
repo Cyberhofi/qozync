@@ -4,12 +4,17 @@ A self-hosted background service that automatically downloads **the music you've
 bought on Qobuz** as owned, DRM-free FLAC/MP3 files, and mirrors new purchases on
 a schedule. Comes with a web UI for an overview, activity, and settings.
 
-It uses Qobuz's official `purchase/getUserPurchases` API to enumerate everything
-you own, downloads anything missing from disk, tags it, organizes it into a clean
+It uses Qobuz's `purchase/getUserPurchasesIds` API to enumerate everything you
+own, downloads anything missing from disk, tags it, organizes it into a clean
 folder tree, and (optionally) triggers a **Jellyfin** library scan afterwards.
 Downloading your own purchases works even without an active streaming subscription.
 
 > This tool only downloads music **you have purchased**. Keep it for personal use.
+
+> ⚠️ **Heads up: this is totally vibe-coded.** It was built quickly, mostly with
+> an AI assistant, and published on the off chance someone else finds it useful.
+> There are no guarantees, no promises of maintenance, and it might break the day
+> Qobuz changes something. Read the code, use it at your own risk, and PRs welcome. ✌️
 
 ## Features
 
