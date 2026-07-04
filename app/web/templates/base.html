@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Qobuz Sync{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #0f1115; --panel: #181b22; --panel2: #1f232c; --border: #2a2f3a;
+      --text: #e6e8ec; --muted: #8b93a1; --accent: #4c8dff; --accent2: #2f6fe0;
+      --good: #3fb27f; --warn: #d9a441; --bad: #e05b5b;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { display: flex; align-items: center; gap: 24px; padding: 0 24px;
+      background: var(--panel); border-bottom: 1px solid var(--border); height: 56px; }
+    header .brand { font-weight: 700; letter-spacing: .3px; }
+    header nav { display: flex; gap: 4px; flex: 1; }
+    header nav a { padding: 8px 14px; border-radius: 8px; color: var(--muted); }
+    header nav a.active, header nav a:hover { background: var(--panel2); color: var(--text); text-decoration: none; }
+    main { max-width: 1040px; margin: 28px auto; padding: 0 24px; }
+    h1 { font-size: 22px; margin: 0 0 20px; }
+    h2 { font-size: 16px; margin: 0 0 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .stat { font-size: 30px; font-weight: 700; }
+    .stat .label { display: block; font-size: 12px; font-weight: 500; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
+    tr:last-child td { border-bottom: none; }
+    .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .pill.done { background: rgba(63,178,127,.15); color: var(--good); }
+    .pill.pending { background: rgba(140,147,161,.15); color: var(--muted); }
+    .pill.downloading { background: rgba(76,141,255,.15); color: var(--accent); }
+    .pill.error { background: rgba(224,91,91,.15); color: var(--bad); }
+    .pill.skipped { background: rgba(217,164,65,.15); color: var(--warn); }
+    input, select, button { font: inherit; }
+    input, select { background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 9px 11px; width: 100%; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+    .btn { display: inline-block; background: var(--accent); color: #fff; border: none; border-radius: 8px;
+      padding: 9px 16px; cursor: pointer; font-weight: 600; }
+    .btn:hover { background: var(--accent2); text-decoration: none; }
+    .btn.secondary { background: var(--panel2); border: 1px solid var(--border); color: var(--text); }
+    .btn.danger { background: transparent; border: 1px solid var(--bad); color: var(--bad); }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .muted { color: var(--muted); }
+    .notice { padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; }
+    .notice.success { background: rgba(63,178,127,.12); border: 1px solid var(--good); }
+    .notice.error { background: rgba(224,91,91,.12); border: 1px solid var(--bad); }
+    .bar { height: 8px; background: var(--panel2); border-radius: 999px; overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 720px) { .split { grid-template-columns: 1fr; } header nav { overflow-x: auto; } }
+    code, .mono { font-family: "SF Mono", Consolas, monospace; font-size: 13px; }
+    section.card + section.card { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  {% if request.session.get('auth') %}
+  <header>
+    <span class="brand">♪ Qobuz Sync</span>
+    <nav>
+      <a href="/" class="{{ 'active' if active=='dashboard' }}">Dashboard</a>
+      <a href="/library" class="{{ 'active' if active=='library' }}">Library</a>
+      <a href="/activity" class="{{ 'active' if active=='activity' }}">Activity</a>
+      <a href="/logs" class="{{ 'active' if active=='logs' }}">Logs</a>
+      <a href="/settings" class="{{ 'active' if active=='settings' }}">Settings</a>
+    </nav>
+    <a href="/logout" class="muted">Log out</a>
+  </header>
+  {% endif %}
+  <main>
+    {% if notice %}<div class="notice {{ notice[0] }}">{{ notice[1] }}</div>{% endif %}
+    {% block body %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

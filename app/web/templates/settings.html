@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Settings — Qobuz Sync{% endblock %}
+{% block body %}
+<h1>Settings</h1>
+
+<section class="card">
+  <h2>Qobuz account</h2>
+  {% if connected %}
+    <p>Connected as <strong>{{ email }}</strong>.
+       <span class="pill done">active</span></p>
+    <div class="row">
+      <form method="post" action="/settings/sync-now"><button class="btn" type="submit">Sync now</button></form>
+      <form method="post" action="/settings/disconnect"><button class="btn danger" type="submit">Disconnect</button></form>
+    </div>
+  {% else %}
+    <div class="notice" style="background:rgba(217,164,65,.12); border:1px solid var(--warn);">
+      Since April 2026 Qobuz blocks app email/password logins. Use the <strong>auth token</strong>
+      method below — it's the reliable way to connect.
+    </div>
+
+    <div class="row" style="gap:18px; margin-bottom:6px;">
+      <label style="margin:0;"><input type="radio" name="_m" value="token" checked onchange="pick('token')" style="width:auto;"> Auth token (recommended)</label>
+      <label style="margin:0;"><input type="radio" name="_m" value="password" onchange="pick('password')" style="width:auto;"> Email &amp; password</label>
+    </div>
+
+    <form method="post" action="/settings/connect" id="tokenForm">
+      <input type="hidden" name="method" value="token">
+      <details style="margin:10px 0;">
+        <summary class="muted" style="cursor:pointer;">How to get your auth token (1 minute)</summary>
+        <ol class="muted" style="font-size:13px; line-height:1.7;">
+          <li>Open <a href="https://play.qobuz.com" target="_blank" rel="noopener">play.qobuz.com</a> and log in.</li>
+          <li>Press <code>F12</code> → <strong>Network</strong> tab. Reload the page.</li>
+          <li>Click any request to <code>api.json</code>, open <strong>Headers</strong>, and find
+              <code>x-user-auth-token</code> under Request Headers.</li>
+          <li>Copy its value and paste it below. (Alternatively: Application → Local Storage.)</li>
+        </ol>
+      </details>
+      <label>User auth token</label>
+      <input type="password" name="token" placeholder="Paste x-user-auth-token…" autocomplete="off">
+      <button class="btn" style="margin-top:16px;" type="submit">Connect with token</button>
+    </form>
+
+    <form method="post" action="/settings/connect" id="pwForm" style="display:none;">
+      <input type="hidden" name="method" value="password">
+      <div class="split">
+        <div><label>Email</label><input type="email" name="email" value="{{ email }}"></div>
+        <div><label>Password</label><input type="password" name="password"></div>
+      </div>
+      <button class="btn" style="margin-top:16px;" type="submit">Connect</button>
+      <p class="muted" style="font-size:13px;">Note: usually rejected by Qobuz now — try the token method if this fails.</p>
+    </form>
+    <script>
+      function pick(m){
+        document.getElementById('tokenForm').style.display = m==='token' ? 'block':'none';
+        document.getElementById('pwForm').style.display = m==='password' ? 'block':'none';
+      }
+    </script>
+  {% endif %}
+</section>
+
+<section class="card">
+  <form method="post" action="/settings/save">
+    <h2>Download preferences</h2>
+    <div class="split">
+      <div>
+        <label>Preferred quality</label>
+        <select name="quality">
+          {% for fid, name in formats.items() %}
+          <option value="{{ fid }}" {{ 'selected' if quality==fid }}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Sync interval (hours)</label>
+        <input type="number" name="interval" min="1" max="168" value="{{ interval }}">
+      </div>
+    </div>
+    <label>Download folder</label>
+    <input type="text" value="{{ music_dir }}" disabled>
+    <p class="muted" style="font-size:13px;">Set via the <code>QOBUZ_MUSIC_DIR</code> env / Docker volume.</p>
+
+    <h2 style="margin-top:26px;">Jellyfin (optional)</h2>
+    <p class="muted">After each sync that adds files, trigger a Jellyfin library scan.</p>
+    <div class="split">
+      <div><label>Server URL</label><input type="url" name="jellyfin_url" value="{{ jellyfin_url }}" placeholder="http://jellyfin:8096"></div>
+      <div><label>API key {% if has_jellyfin_key %}<span class="muted">(saved — leave blank to keep)</span>{% endif %}</label>
+        <input type="password" name="jellyfin_api_key" placeholder="{{ '••••••••' if has_jellyfin_key else '' }}"></div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn secondary" type="button" onclick="testJellyfin()">Test connection</button>
+      <span id="jf-result" class="muted"></span>
+    </div>
+
+    <h2 style="margin-top:26px;">Advanced — app credentials override</h2>
+    <p class="muted">Normally auto-extracted from Qobuz. Set these only if extraction fails.</p>
+    <div class="split">
+      <div><label>app_id</label><input type="text" name="app_id" value="{{ app_id }}"></div>
+      <div><label>app_secret {% if has_app_secret %}<span class="muted">(saved — leave blank to keep)</span>{% endif %}</label>
+        <input type="password" name="app_secret" placeholder="{{ '••••••••' if has_app_secret else '' }}"></div>
+    </div>
+
+    <button class="btn" style="margin-top:22px;" type="submit">Save settings</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+async function testJellyfin() {
+  const url = document.querySelector('[name=jellyfin_url]').value;
+  const key = document.querySelector('[name=jellyfin_api_key]').value;
+  const out = document.getElementById('jf-result');
+  out.textContent = 'Testing…';
+  const body = new URLSearchParams({url, api_key: key});
+  try {
+    const r = await fetch('/settings/test-jellyfin', {method:'POST', body});
+    const d = await r.json();
+    out.textContent = (d.ok ? '✓ ' : '✗ ') + d.message;
+    out.style.color = d.ok ? 'var(--good)' : 'var(--bad)';
+  } catch (e) { out.textContent = '✗ request failed'; out.style.color = 'var(--bad)'; }
+}
+</script>
+{% endblock %}

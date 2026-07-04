@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Library — Qobuz Sync{% endblock %}
+{% block body %}
+<h1>Library <span class="muted" style="font-size:15px;">· {{ total }} tracks</span></h1>
+
+<form method="get" action="/library" class="row" style="margin-bottom:18px;">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search title, artist, album…" style="max-width:320px;">
+  <select name="status" style="max-width:170px;">
+    <option value="">All statuses</option>
+    {% for s in ['done','pending','downloading','error','skipped'] %}
+    <option value="{{ s }}" {{ 'selected' if status==s }}>{{ s|capitalize }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn secondary" type="submit">Filter</button>
+</form>
+
+<section class="card" style="padding:0;">
+  <table>
+    <thead><tr><th>#</th><th>Title</th><th>Artist</th><th>Album</th><th>Status</th><th>Size</th></tr></thead>
+    <tbody>
+      {% for t in rows %}
+      <tr>
+        <td class="muted mono">{{ t.track_number or '' }}</td>
+        <td>{{ t.title }}</td>
+        <td class="muted">{{ t.artist }}</td>
+        <td class="muted">{{ t.album }}{% if t.year %} ({{ t.year }}){% endif %}</td>
+        <td><span class="pill {{ t.status }}">{{ t.status }}</span></td>
+        <td class="muted mono">{{ t.file_size|filesize if t.file_size else '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted" style="padding:24px; text-align:center;">No tracks. Connect and run a sync.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if pages > 1 %}
+<div class="row" style="margin-top:16px; justify-content:center;">
+  {% if page > 1 %}<a class="btn secondary" href="/library?page={{ page-1 }}&status={{ status }}&q={{ q }}">← Prev</a>{% endif %}
+  <span class="muted">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="btn secondary" href="/library?page={{ page+1 }}&status={{ status }}&q={{ q }}">Next →</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

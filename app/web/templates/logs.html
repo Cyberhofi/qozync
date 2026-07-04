@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Logs — Qobuz Sync{% endblock %}
+{% block body %}
+<h1>Logs</h1>
+<section class="card" style="padding:0;">
+  <table>
+    <thead><tr><th style="width:150px;">Time</th><th style="width:80px;">Level</th><th>Message</th></tr></thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td class="muted mono">{{ e.ts.isoformat()[:19].replace('T',' ') }}</td>
+        <td><span class="pill {{ 'error' if e.level=='error' else 'skipped' if e.level=='warning' else 'done' if e.level=='success' else 'pending' }}">{{ e.level }}</span></td>
+        <td>{{ e.message }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="muted" style="padding:24px; text-align:center;">No log entries yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

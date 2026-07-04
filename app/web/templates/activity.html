@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Activity — Qobuz Sync{% endblock %}
+{% block body %}
+<h1>Activity</h1>
+
+<section class="card">
+  <div class="row" style="justify-content:space-between;">
+    <div>
+      <h2 style="margin:0;">Current sync</h2>
+      <p class="muted" id="phase" style="margin:6px 0 0;">…</p>
+    </div>
+    <div class="row">
+      <form method="post" action="/settings/sync-now"><button class="btn" id="syncbtn" type="submit">Sync now</button></form>
+    </div>
+  </div>
+  <div class="bar" style="margin-top:14px;"><span id="progbar" style="width:0%"></span></div>
+  <p class="muted mono" id="current" style="margin-top:10px;"></p>
+</section>
+
+<section class="card">
+  <div class="row" style="justify-content:space-between;">
+    <h2 style="margin:0;">Errors</h2>
+    <form method="post" action="/activity/retry-all"><button class="btn secondary" type="submit">Retry all</button></form>
+  </div>
+  <table style="margin-top:10px;">
+    <thead><tr><th>Track</th><th>Error</th><th></th></tr></thead>
+    <tbody id="errors">
+      <tr><td colspan="3" class="muted">Loading…</td></tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+async function refresh() {
+  try {
+    const r = await fetch('/activity/data');
+    const d = await r.json();
+    const st = d.state, counts = d.counts;
+    const remaining = (counts.pending || 0) + (counts.error || 0);
+    document.getElementById('phase').textContent =
+      st.running ? `Running — ${st.phase} (${st.done}/${st.total})`
+                 : (st.last_result ? `Idle · last run: ${st.last_result}` : 'Idle')
+      + ` · ${counts.done || 0} downloaded, ${remaining} remaining`;
+    const pct = st.total ? Math.round(100 * st.done / st.total) : (st.running ? 0 : 100);
+    document.getElementById('progbar').style.width = pct + '%';
+    document.getElementById('current').textContent = st.current || '';
+    document.getElementById('syncbtn').disabled = st.running;
+
+    const tbody = document.getElementById('errors');
+    if (!d.errors.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="muted">No errors.</td></tr>';
+    } else {
+      tbody.innerHTML = d.errors.map(e =>
+        `<tr><td>${escapeHtml(e.name)}</td><td class="muted">${escapeHtml(e.error||'')}</td>`
+        + `<td><form method="post" action="/activity/retry/${e.id}">`
+        + `<button class="btn secondary" type="submit">Retry</button></form></td></tr>`
+      ).join('');
+    }
+  } catch (e) { /* transient */ }
+}
+function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+refresh();
+setInterval(refresh, 3000);
+</script>
+{% endblock %}

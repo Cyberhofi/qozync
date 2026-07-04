@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ "Set up" if setup else "Log in" }} — Qobuz Sync{% endblock %}
+{% block body %}
+<div style="max-width: 380px; margin: 8vh auto;">
+  <h1 style="text-align:center;">♪ Qobuz Sync</h1>
+  <section class="card">
+    {% if setup %}
+      <h2>Create admin password</h2>
+      <p class="muted">First run — set a password to protect this dashboard. It stores your Qobuz credentials.</p>
+    {% else %}
+      <h2>Log in</h2>
+    {% endif %}
+    {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+    <form method="post" action="/login">
+      <label>Password</label>
+      <input type="password" name="password" autofocus required>
+      {% if setup %}
+        <label>Confirm password</label>
+        <input type="password" name="confirm" required>
+      {% endif %}
+      <button class="btn" style="width:100%; margin-top:18px;" type="submit">
+        {{ "Create & continue" if setup else "Log in" }}
+      </button>
+    </form>
+  </section>
+</div>
+{% endblock %}

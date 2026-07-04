@@ -1,0 +1,11 @@
+.venv/
+config/
+music/
+tests/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+*.md
+!README.md
+.env

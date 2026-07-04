@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Qobuz Sync{% endblock %}
+{% block body %}
+<h1>Dashboard</h1>
+
+{% if not connected %}
+<div class="notice error">
+  Not connected to Qobuz. <a href="/settings">Enter your credentials in Settings</a> to begin.
+</div>
+{% endif %}
+
+<div class="grid" style="margin-bottom:24px;">
+  <div class="card"><div class="stat">{{ total_tracks }}<span class="label">Purchased tracks</span></div></div>
+  <div class="card"><div class="stat">{{ counts.get('done', 0) }}<span class="label">Downloaded</span></div></div>
+  <div class="card"><div class="stat">{{ (counts.get('pending',0) + counts.get('error',0)) }}<span class="label">Remaining</span></div></div>
+  <div class="card"><div class="stat">{{ counts.get('error', 0) }}<span class="label">Errors</span></div></div>
+  <div class="card"><div class="stat">{{ storage|filesize }}<span class="label">On disk</span></div></div>
+</div>
+
+<section class="card">
+  <div class="row" style="justify-content:space-between;">
+    <div>
+      <h2 style="margin:0;">Sync</h2>
+      <p class="muted" style="margin:6px 0 0;">
+        {% if state.running %}Running — {{ state.phase }} ({{ state.done }}/{{ state.total }})
+        {% elif last_result %}Last run: {{ last_result }}
+        {% else %}Idle{% endif %}
+        {% if next_run %}· Next: <span class="mono">{{ next_run[:16].replace('T',' ') }}</span>{% endif %}
+      </p>
+    </div>
+    <form method="post" action="/settings/sync-now">
+      <button class="btn" type="submit" {{ 'disabled' if state.running or not connected }}>Sync now</button>
+    </form>
+  </div>
+  {% if state.running and state.total %}
+  <div class="bar" style="margin-top:14px;"><span style="width: {{ (100 * state.done / state.total)|round }}%"></span></div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Recently downloaded</h2>
+  {% if recent %}
+  <table>
+    <thead><tr><th>Title</th><th>Artist</th><th>Album</th><th>When</th></tr></thead>
+    <tbody>
+      {% for t in recent %}
+      <tr>
+        <td>{{ t.title }}</td>
+        <td class="muted">{{ t.artist }}</td>
+        <td class="muted">{{ t.album }}</td>
+        <td class="muted mono">{{ (t.downloaded_at.isoformat()[:16].replace('T',' ')) if t.downloaded_at else '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Nothing downloaded yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+{% if state.running %}<script>setTimeout(function(){ location.reload(); }, 4000);</script>{% endif %}
+{% endblock %}
