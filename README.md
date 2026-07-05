@@ -96,10 +96,13 @@ echo "SECRET_KEY=$(openssl rand -base64 32 | tr '+/' '-_')" >> .env
   behind a reverse proxy (Caddy/Traefik/nginx) with TLS, or only expose it on a
   private network / VPN. To bind to localhost only (proxy in front):
   `ports: ["127.0.0.1:8080:8080"]`.
-- **File ownership** — the container runs as root, so downloaded files are
-  root-owned. That's fine for a personal server; if another app (e.g. Jellyfin)
-  needs a specific owner, `chown` the music dir or run the container with a
-  matching `user:` in compose.
+- **File ownership / `Permission denied`** — by default the container runs as
+  root. If your `/music` (or `/config`) maps to a folder owned by another user, a
+  NAS/NFS share (root-squash), or a userns-remapped host, writes fail with
+  `[Errno 13] Permission denied`. Fix it by running as the folder's owner: set
+  `PUID`/`PGID` in `.env` (find them with `id <user>`) and make sure both host
+  dirs are owned by that user (`sudo chown -R <uid>:<gid> <dir>`). Quick unblock
+  on a local disk: `sudo chmod -R a+rwX <music-dir> <config-dir>`.
 - **Jellyfin on the same host** — use the container/service name or host IP that's
   reachable from *inside* this container (e.g. `http://jellyfin:8096` if on the
   same Docker network, not `localhost`).
