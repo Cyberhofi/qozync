@@ -1,11 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Library — Qobuz Sync{% endblock %}
+{% block title %}Library — Music Sync{% endblock %}
 {% block body %}
-<h1>Library <span class="muted" style="font-size:15px;">· {{ total }} tracks</span></h1>
+<h1>Library <span class="muted" style="font-size:15px;">· {{ total }} items</span></h1>
 
 <form method="get" action="/library" class="row" style="margin-bottom:18px;">
-  <input type="text" name="q" value="{{ q }}" placeholder="Search title, artist, album…" style="max-width:320px;">
-  <select name="status" style="max-width:170px;">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search title, artist, album…" style="max-width:280px;">
+  <select name="source" style="max-width:150px;">
+    <option value="">All sources</option>
+    <option value="qobuz" {{ 'selected' if source=='qobuz' }}>Qobuz</option>
+    <option value="bandcamp" {{ 'selected' if source=='bandcamp' }}>Bandcamp</option>
+  </select>
+  <select name="status" style="max-width:160px;">
     <option value="">All statuses</option>
     {% for s in ['done','pending','downloading','error','skipped'] %}
     <option value="{{ s }}" {{ 'selected' if status==s }}>{{ s|capitalize }}</option>
@@ -16,19 +21,19 @@
 
 <section class="card" style="padding:0;">
   <table>
-    <thead><tr><th>#</th><th>Title</th><th>Artist</th><th>Album</th><th>Status</th><th>Size</th></tr></thead>
+    <thead><tr><th>Source</th><th>Title</th><th>Artist</th><th>Album</th><th>Status</th><th>Size</th></tr></thead>
     <tbody>
       {% for t in rows %}
       <tr>
-        <td class="muted mono">{{ t.track_number or '' }}</td>
-        <td>{{ t.title }}</td>
+        <td><span class="pill {{ 'downloading' if t.source=='qobuz' else 'skipped' }}">{{ t.source }}</span></td>
+        <td>{{ t.title }}{% if t.kind=='album' %} <span class="muted">(album)</span>{% endif %}</td>
         <td class="muted">{{ t.artist }}</td>
         <td class="muted">{{ t.album }}{% if t.year %} ({{ t.year }}){% endif %}</td>
         <td><span class="pill {{ t.status }}">{{ t.status }}</span></td>
-        <td class="muted mono">{{ t.file_size|filesize if t.file_size else '' }}</td>
+        <td class="muted mono">{{ t.size|filesize if t.size else '' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="muted" style="padding:24px; text-align:center;">No tracks. Connect and run a sync.</td></tr>
+      <tr><td colspan="6" class="muted" style="padding:24px; text-align:center;">Nothing here. Connect a source and run a sync.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -36,9 +41,9 @@
 
 {% if pages > 1 %}
 <div class="row" style="margin-top:16px; justify-content:center;">
-  {% if page > 1 %}<a class="btn secondary" href="/library?page={{ page-1 }}&status={{ status }}&q={{ q }}">← Prev</a>{% endif %}
+  {% if page > 1 %}<a class="btn secondary" href="/library?page={{ page-1 }}&status={{ status }}&q={{ q }}&source={{ source }}">← Prev</a>{% endif %}
   <span class="muted">Page {{ page }} of {{ pages }}</span>
-  {% if page < pages %}<a class="btn secondary" href="/library?page={{ page+1 }}&status={{ status }}&q={{ q }}">Next →</a>{% endif %}
+  {% if page < pages %}<a class="btn secondary" href="/library?page={{ page+1 }}&status={{ status }}&q={{ q }}&source={{ source }}">Next →</a>{% endif %}
 </div>
 {% endif %}
 {% endblock %}

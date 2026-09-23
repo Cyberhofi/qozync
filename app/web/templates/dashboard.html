@@ -5,12 +5,12 @@
 
 {% if not connected %}
 <div class="notice error">
-  Not connected to Qobuz. <a href="/settings">Enter your credentials in Settings</a> to begin.
+  No source connected yet. <a href="/settings">Connect Qobuz and/or Bandcamp in Settings</a> to begin.
 </div>
 {% endif %}
 
 <div class="grid" style="margin-bottom:24px;">
-  <div class="card"><div class="stat">{{ total_tracks }}<span class="label">Purchased tracks</span></div></div>
+  <div class="card"><div class="stat">{{ total_tracks }}<span class="label">Purchased items</span></div></div>
   <div class="card"><div class="stat">{{ counts.get('done', 0) }}<span class="label">Downloaded</span></div></div>
   <div class="card"><div class="stat">{{ (counts.get('pending',0) + counts.get('error',0)) }}<span class="label">Remaining</span></div></div>
   <div class="card"><div class="stat">{{ counts.get('error', 0) }}<span class="label">Errors</span></div></div>

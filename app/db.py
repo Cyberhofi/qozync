@@ -90,6 +90,38 @@ class Track(Base):
     )
 
 
+class BandcampItem(Base):
+    """One purchased Bandcamp item (an album or a standalone track).
+
+    Bandcamp's download unit is the whole item (an album arrives as a zip that we
+    extract), so — unlike Qobuz's per-track ``Track`` — the grain here is the
+    purchase. Kept in its own table so the working Qobuz path is untouched.
+    """
+
+    __tablename__ = "bandcamp_items"
+
+    item_id: Mapped[str] = mapped_column(String(64), primary_key=True)  # sale-item key, e.g. "p12345"
+    item_type: Mapped[str] = mapped_column(String(16), default="album")  # album | track
+    band: Mapped[str] = mapped_column(Text, default="")
+    title: Mapped[str] = mapped_column(Text, default="")
+    year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    art_url: Mapped[str] = mapped_column(Text, default="")
+    redownload_url: Mapped[str] = mapped_column(Text, default="")
+
+    status: Mapped[str] = mapped_column(String(16), default=STATUS_PENDING, index=True)
+    fmt: Mapped[str] = mapped_column(String(24), default="")
+    file_path: Mapped[str] = mapped_column(Text, default="")  # album folder or track file
+    file_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+
+    purchased_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    downloaded_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class LogEntry(Base):
     __tablename__ = "logs"
 

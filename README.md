@@ -1,13 +1,16 @@
-# Qobuz Purchase Sync
+# Purchase Sync (Qobuz + Bandcamp)
 
 A self-hosted background service that automatically downloads **the music you've
-bought on Qobuz** as owned, DRM-free FLAC/MP3 files, and mirrors new purchases on
-a schedule. Comes with a web UI for an overview, activity, and settings.
+bought on Qobuz and Bandcamp** as owned, DRM-free files, and mirrors new purchases
+on a schedule. Comes with a web UI for an overview, activity, and settings.
 
-It uses Qobuz's `purchase/getUserPurchasesIds` API to enumerate everything you
-own, downloads anything missing from disk, tags it, organizes it into a clean
-folder tree, and (optionally) triggers a **Jellyfin** library scan afterwards.
-Downloading your own purchases works even without an active streaming subscription.
+For **Qobuz** it uses `purchase/getUserPurchasesIds` to enumerate everything you
+own, downloads missing tracks, tags them, and organizes them into a clean folder
+tree. For **Bandcamp** it reads your fan collection and downloads each purchase in
+your chosen format (albums arrive as zips and are extracted; files come already
+tagged). Both land in the same library and can trigger a **Jellyfin** scan when
+new files appear. Downloading your own purchases works without an active
+subscription — you already own the music.
 
 > This tool only downloads music **you have purchased**. Keep it for personal use.
 
@@ -18,12 +21,13 @@ Downloading your own purchases works even without an active streaming subscripti
 
 ## Features
 
-- 🔁 **Automatic sync** of all Qobuz purchases on a configurable interval (default 6h)
-- 🎵 **Full quality** — up to Hi-Res 24-bit/192kHz FLAC (configurable)
-- 🏷️ **Tagged & organized** — `Artist/Album (Year)/01 - Title.flac` with embedded cover art
+- 🔁 **Automatic sync** of all Qobuz + Bandcamp purchases on a schedule (default 6h)
+- 🎵 **Full quality** — Qobuz up to Hi-Res 24-bit/192kHz; Bandcamp FLAC/ALAC/WAV/MP3 (configurable)
+- 🏷️ **Tagged & organized** — `Artist/Album (Year)/…` with embedded cover art
+- 🛒 **Two sources, one library** — both write to the same folder; source badge + filter in the UI
 - 🖥️ **Web UI** — dashboard, searchable library, live activity, logs, settings
 - 📺 **Jellyfin integration** — one library scan per sync that adds files
-- 🔐 **Safe credentials** — connect with a browser auth token (no password stored);
+- 🔐 **Safe credentials** — connect with a browser token / cookie (no passwords stored);
   secrets encrypted at rest; UI behind an admin password
 - 🐳 **Docker-first** — one container, two volumes
 
@@ -129,20 +133,33 @@ app logins, but it usually fails today.
 
 Downloads land in `./music`; state lives in `./config` (SQLite DB + encryption key).
 
+### Connecting Bandcamp
+
+Bandcamp has no login API either, so — like the Qobuz token — you connect with the
+`identity` cookie your browser already holds (it's stored encrypted; treat it like a
+password):
+
+1. Open <https://bandcamp.com> and log in normally.
+2. Press <kbd>F12</kbd> → **Application** (Chrome) / **Storage** (Firefox) →
+   **Cookies** → `https://bandcamp.com`.
+3. Copy the full value of the cookie named `identity`.
+4. Paste it into **Settings → Bandcamp account → Connect**, and pick your format.
+
+Bandcamp albums download as a zip and are extracted into `Artist/Album/`; single-track
+purchases are saved under `Artist/`. Files come already tagged with cover art.
+
 ## How it works
 
-| Step | Qobuz API |
-|------|-----------|
-| Get app credentials | scraped from the public web-player bundle (override in Settings) |
-| Authenticate | browser `user_auth_token` (validated via `user/get`) |
-| List purchases | `purchase/getUserPurchasesIds` → `album/get` + `track/get` |
-| Resolve download | `track/getFileUrl` (MD5-signed with the app secret) |
-| Save | stream file → tag with `mutagen` → organize |
+| Step | Qobuz | Bandcamp |
+|------|-------|----------|
+| Authenticate | browser `user_auth_token` (via `user/get`) | browser `identity` cookie |
+| List purchases | `purchase/getUserPurchasesIds` → `album/get`+`track/get` | `fancollection/1/collection_items` |
+| Resolve download | `track/getFileUrl` (MD5-signed) | redownload page `pagedata` → format URL |
+| Save | stream → tag with `mutagen` → organize | stream zip/file → extract → organize |
 
-The engine takes `getUserPurchasesIds` as the source of truth (albums + track ids),
-expands albums to their tracks, fetches standalone track purchases, and diffs the
-result against a local SQLite catalog — so re-runs only download what's missing. A
-track Qobuz serves as a sample (not owned) is marked `skipped` and not retried.
+Each source diffs its purchases against a local SQLite catalog (Qobuz at track grain,
+Bandcamp at item grain), so re-runs only download what's missing. Bandcamp requests go
+through `curl_cffi` (browser TLS impersonation) to avoid being blocked.
 
 ## Configuration
 
@@ -150,15 +167,17 @@ Set in the UI (**Settings**) or via env (`.env` / compose):
 
 | Setting | Env | Default |
 |---------|-----|---------|
-| Preferred quality | `QOBUZ_QUALITY` | `27` (Hi-Res ≤192k) |
+| Qobuz quality | `QOBUZ_QUALITY` | `27` (Hi-Res ≤192k) |
+| Bandcamp format | `BANDCAMP_FORMAT` | `flac` |
 | Sync interval (hours) | `QOBUZ_SYNC_INTERVAL_HOURS` | `6` |
 | Music directory | `QOBUZ_MUSIC_DIR` | `/music` |
 | Config directory | `QOBUZ_CONFIG_DIR` | `/config` |
 | Encryption key | `SECRET_KEY` | auto-generated into config volume |
 | Jellyfin URL / key | `JELLYFIN_URL` / `JELLYFIN_API_KEY` | — |
 
-Quality `format_id`s: `27` Hi-Res ≤192kHz · `7` Hi-Res ≤96kHz · `6` FLAC CD · `5` MP3 320.
-The request is automatically capped to the best quality each track offers.
+Qobuz `format_id`s: `27` Hi-Res ≤192kHz · `7` Hi-Res ≤96kHz · `6` FLAC CD · `5` MP3 320
+(capped to the best each track offers). Bandcamp formats: `flac`, `alac`, `wav`,
+`aiff-lossless`, `mp3-320`, `mp3-v0`, `vorbis`, `aac-hi`.
 
 ## Local development
 
@@ -180,16 +199,24 @@ pytest
   use the auth-token method instead (see above).
 - **Jellyfin not scanning** — confirm URL + API key with **Test connection**; the scan
   only fires when a sync run actually downloaded new files.
+- **Bandcamp "login expired" / auth errors** — the `identity` cookie rotates; grab a
+  fresh one from your browser and reconnect under **Settings → Bandcamp account**.
+- **Bandcamp downloads blocked / empty** — Bandcamp is TLS-fingerprinting-sensitive; the
+  client already impersonates Chrome via `curl_cffi`. If a format isn't offered for an
+  item it automatically falls back to the next-best lossless one.
 
 ## Project layout
 
 ```
 app/
   qobuz/     bundle credential extraction, API client, JSON models
-  sync/      engine (enumerate + diff + download), downloader (tag/organize),
-             scheduler, jellyfin notifier
+  bandcamp/  cookie client (curl_cffi), collection listing, download + zip extract, sync
+  sync/      engine (runs each source: enumerate + diff + download), downloader
+             (Qobuz tag/organize), scheduler, jellyfin notifier
   web/       FastAPI routes, Jinja templates, admin-password gate
+  catalog.py source-agnostic views (counts, library, activity) over both tables
   config.py  typed settings store   ·   db.py  SQLAlchemy models + encryption
   paths.py   config/music dirs + key   ·   applog.py  logging to stdout + DB
-tests/       signing, path building, bundle parsing, model parsing, purchase enumeration
+tests/       signing, path building, bundle/model parsing, purchase enumeration,
+             Bandcamp parsing + zip extraction
 ```

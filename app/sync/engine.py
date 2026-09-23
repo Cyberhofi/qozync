@@ -288,10 +288,42 @@ def process_downloads(client: QobuzClient, preferred_format: int) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# Per-source runs
+# --------------------------------------------------------------------------- #
+def _run_qobuz() -> dict:
+    """Refresh + download the Qobuz catalog. Skipped if not connected."""
+    if not config.is_configured():
+        return {"skipped": True}
+    client = build_client()
+    try:
+        STATE.phase = "Qobuz: refreshing catalog"
+        try:
+            new_in_catalog = refresh_catalog(client)
+        except AuthError as e:
+            applog.error(f"Qobuz auth failed — reconnect required: {e}")
+            return {"error": "auth"}
+        applog.info(f"Qobuz catalog refreshed: {new_in_catalog} new purchase(s)")
+        downloaded = process_downloads(client, config.qobuz_config().quality)
+        return {"downloaded": downloaded, "new": new_in_catalog}
+    finally:
+        client.close()
+
+
+def _run_bandcamp() -> dict:
+    # Imported lazily so this module never hard-depends on the Bandcamp source.
+    from ..bandcamp import sync as bc_sync
+
+    return bc_sync.run(STATE)
+
+
+# --------------------------------------------------------------------------- #
 # Top-level run
 # --------------------------------------------------------------------------- #
 def run_sync(trigger: str = "manual") -> dict:
-    """Run one full sync. Non-blocking-safe: returns immediately if already running."""
+    """Run one full sync across all connected sources.
+
+    Non-blocking-safe: returns immediately if a run is already in progress.
+    """
     if not _lock.acquire(blocking=False):
         applog.info("Sync already in progress; ignoring trigger")
         return {"skipped": True, "reason": "already running"}
@@ -308,39 +340,31 @@ def run_sync(trigger: str = "manual") -> dict:
     STATE.total = 0
     applog.info(f"Sync started ({trigger})")
 
+    total_downloaded = 0
+    parts: list[str] = []
     try:
-        client = build_client()
-    except QobuzError as e:
-        STATE.running = False
-        STATE.last_result = str(e)
-        _lock.release()
-        applog.warning(f"Sync aborted: {e}")
-        return {"error": str(e)}
+        for name, runner in (("Qobuz", _run_qobuz), ("Bandcamp", _run_bandcamp)):
+            try:
+                res = runner()
+            except Exception as e:  # one source failing must not abort the other
+                applog.error(f"{name} sync error: {e}")
+                parts.append(f"{name}: error")
+                continue
+            if res.get("skipped"):
+                continue
+            if res.get("error"):
+                parts.append(f"{name}: {res['error']}")
+                continue
+            total_downloaded += res.get("downloaded", 0)
+            parts.append(f"{name}: {res.get('downloaded', 0)} dl, {res.get('new', 0)} new")
 
-    try:
-        STATE.phase = "refreshing catalog"
-        try:
-            new_in_catalog = refresh_catalog(client)
-        except AuthError as e:
-            applog.error(f"Qobuz auth failed — reconnect required: {e}")
-            STATE.last_result = "authentication failed — reconnect in Settings"
-            return {"error": "auth"}
-        applog.info(f"Catalog refreshed: {new_in_catalog} new purchase(s)")
-
-        preferred = config.qobuz_config().quality
-        downloaded = process_downloads(client, preferred)
-
-        if downloaded > 0:
+        if total_downloaded > 0:
             jellyfin.trigger_scan()
 
-        STATE.last_result = (
-            f"{downloaded} downloaded, {STATE.errors} error(s), "
-            f"{new_in_catalog} new in catalog"
-        )
-        applog.success(f"Sync finished: {STATE.last_result}")
-        return {"downloaded": downloaded, "errors": STATE.errors, "new": new_in_catalog}
+        STATE.last_result = " · ".join(parts) if parts else "nothing to sync (no sources connected)"
+        applog.success(f"Sync finished: {STATE.last_result} ({STATE.errors} error(s))")
+        return {"downloaded": total_downloaded, "errors": STATE.errors, "result": STATE.last_result}
     finally:
-        client.close()
         STATE.running = False
         STATE.phase = "idle"
         STATE.current = ""
