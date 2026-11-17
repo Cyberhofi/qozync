@@ -10,7 +10,8 @@ WORKDIR /app
 # Install dependencies first for better layer caching.
 COPY pyproject.toml ./
 COPY app ./app
-RUN pip install --no-cache-dir .
+# --retries/--timeout make the build resilient to flaky PyPI connections.
+RUN pip install --no-cache-dir --retries 5 --timeout 120 .
 
 VOLUME ["/config", "/music"]
 EXPOSE 8080
