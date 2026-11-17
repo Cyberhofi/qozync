@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from app.bandcamp.client import BandcampError, format_extension, select_download
+from app.bandcamp.client import (
+    BandcampError,
+    format_extension,
+    normalize_identity,
+    select_download,
+)
 from app.bandcamp.download import _extract_zip
 from app.bandcamp.models import BandcampPurchase
 
@@ -62,6 +67,24 @@ def test_select_download_falls_back_when_format_missing():
 def test_select_download_errors_when_no_formats():
     with pytest.raises(BandcampError):
         select_download({"download_items": [{"downloads": {}}]}, "flac")
+
+
+def test_normalize_identity_encodes_control_chars():
+    # Literal tabs (a decoded identity cookie) must become %09 so the cookie
+    # actually attaches; this was the "Expecting value: line 1 column 1" bug.
+    assert normalize_identity("1\tabc\tdef") == "1%09abc%09def"
+    assert "\t" not in normalize_identity("a\tb")
+
+
+def test_normalize_identity_strips_prefix_and_quotes():
+    assert normalize_identity('  identity="abcdef"  ') == "abcdef"
+    assert normalize_identity("'abcdef'") == "abcdef"
+
+
+def test_normalize_identity_leaves_encoded_value_untouched():
+    # An already URL-encoded value (what the browser stores) must pass through.
+    enc = "1%09%7B%22x%22%3A1%7D%09deadbeef"
+    assert normalize_identity(enc) == enc
 
 
 def test_format_extension():
