@@ -1,11 +1,10 @@
-"""Library: paginated, filterable list of every purchased track."""
+"""Library: paginated, filterable list of every purchase across all sources."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, Request
-from sqlalchemy import or_, select
 
-from ...db import SessionLocal, Track
+from ... import catalog
 from ..render import render
 
 router = APIRouter()
@@ -18,25 +17,12 @@ def library(
     request: Request,
     status: str = Query(""),
     q: str = Query(""),
+    source: str = Query(""),
     page: int = Query(1, ge=1),
 ):
-    with SessionLocal() as s:
-        stmt = select(Track)
-        if status:
-            stmt = stmt.where(Track.status == status)
-        if q:
-            like = f"%{q}%"
-            stmt = stmt.where(
-                or_(Track.title.ilike(like), Track.artist.ilike(like), Track.album.ilike(like))
-            )
-        total = len(s.scalars(stmt).all())
-        rows = list(
-            s.scalars(
-                stmt.order_by(Track.album_artist, Track.album, Track.disc_number, Track.track_number)
-                .offset((page - 1) * _PAGE_SIZE)
-                .limit(_PAGE_SIZE)
-            ).all()
-        )
+    rows, total = catalog.library_page(
+        status=status, q=q, source=source, page=page, size=_PAGE_SIZE
+    )
     pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
     return render(
         request,
@@ -45,6 +31,7 @@ def library(
         rows=rows,
         status=status,
         q=q,
+        source=source,
         page=page,
         pages=pages,
         total=total,

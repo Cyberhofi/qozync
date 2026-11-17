@@ -14,6 +14,9 @@ dependencies = [
     "itsdangerous>=2.1",
     "mutagen>=1.47",
     "cryptography>=42.0",
+    # Bandcamp fingerprints TLS; curl_cffi impersonates a real browser to avoid
+    # being blocked (bundles its own patched libcurl in the wheel).
+    "curl_cffi>=0.7",
 ]
 
 [project.optional-dependencies]

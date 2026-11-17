@@ -18,6 +18,7 @@ SECRET_KEYS = {
     "qobuz_app_secret",
     "jellyfin_api_key",
     "admin_password_hash",
+    "bandcamp_identity",
 }
 
 # key -> (env var, default)
@@ -33,6 +34,12 @@ DEFAULTS: dict[str, tuple[str, str]] = {
     "jellyfin_url": ("JELLYFIN_URL", ""),
     "jellyfin_api_key": ("JELLYFIN_API_KEY", ""),
     "admin_password_hash": ("", ""),
+    # Bandcamp: browser "identity" cookie + the fan_id/username it resolves to.
+    "bandcamp_identity": ("BANDCAMP_IDENTITY", ""),
+    "bandcamp_fan_id": ("BANDCAMP_FAN_ID", ""),
+    "bandcamp_username": ("", ""),
+    # Download format: flac, alac, wav, mp3-320, mp3-v0, vorbis, aac-hi, aiff-lossless.
+    "bandcamp_format": ("BANDCAMP_FORMAT", "flac"),
 }
 
 
@@ -94,3 +101,26 @@ def is_configured() -> bool:
     """True once we hold a usable Qobuz session (token + app credentials)."""
     cfg = qobuz_config()
     return bool(cfg.token and cfg.app_id and cfg.app_secret)
+
+
+@dataclass
+class BandcampConfig:
+    identity: str
+    fan_id: str
+    username: str
+    fmt: str
+
+
+def bandcamp_config() -> BandcampConfig:
+    return BandcampConfig(
+        identity=get("bandcamp_identity"),
+        fan_id=get("bandcamp_fan_id"),
+        username=get("bandcamp_username"),
+        fmt=get("bandcamp_format", "flac"),
+    )
+
+
+def bandcamp_is_configured() -> bool:
+    """True once we hold a Bandcamp session (identity cookie + fan_id)."""
+    cfg = bandcamp_config()
+    return bool(cfg.identity and cfg.fan_id)

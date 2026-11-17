@@ -59,11 +59,38 @@
 </section>
 
 <section class="card">
+  <h2>Bandcamp account</h2>
+  {% if bandcamp_connected %}
+    <p>Connected as <strong>{{ bandcamp_username or 'your account' }}</strong>. <span class="pill done">active</span></p>
+    <div class="row">
+      <form method="post" action="/settings/sync-now"><button class="btn" type="submit">Sync now</button></form>
+      <form method="post" action="/settings/bandcamp/disconnect"><button class="btn danger" type="submit">Disconnect</button></form>
+    </div>
+  {% else %}
+    <p class="muted">Bandcamp has no login API — connect with your browser's <code>identity</code> cookie (treat it like a password; it's stored encrypted).</p>
+    <form method="post" action="/settings/bandcamp/connect">
+      <details style="margin:10px 0;">
+        <summary class="muted" style="cursor:pointer;">How to get your identity cookie (1 minute)</summary>
+        <ol class="muted" style="font-size:13px; line-height:1.7;">
+          <li>Open <a href="https://bandcamp.com" target="_blank" rel="noopener">bandcamp.com</a> and log in.</li>
+          <li>Press <code>F12</code> → <strong>Application</strong> (Chrome) / <strong>Storage</strong> (Firefox) → <strong>Cookies</strong> → <code>https://bandcamp.com</code>.</li>
+          <li>Find the cookie named <code>identity</code> and copy its full value.</li>
+          <li>Paste it below and connect.</li>
+        </ol>
+      </details>
+      <label>identity cookie</label>
+      <input type="password" name="identity" placeholder="Paste the identity cookie value…" autocomplete="off">
+      <button class="btn" style="margin-top:16px;" type="submit">Connect Bandcamp</button>
+    </form>
+  {% endif %}
+</section>
+
+<section class="card">
   <form method="post" action="/settings/save">
     <h2>Download preferences</h2>
     <div class="split">
       <div>
-        <label>Preferred quality</label>
+        <label>Qobuz quality</label>
         <select name="quality">
           {% for fid, name in formats.items() %}
           <option value="{{ fid }}" {{ 'selected' if quality==fid }}>{{ name }}</option>
@@ -71,9 +98,20 @@
         </select>
       </div>
       <div>
+        <label>Bandcamp format</label>
+        <select name="bandcamp_format">
+          {% for val, name in bandcamp_formats.items() %}
+          <option value="{{ val }}" {{ 'selected' if bandcamp_format==val }}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="split">
+      <div>
         <label>Sync interval (hours)</label>
         <input type="number" name="interval" min="1" max="168" value="{{ interval }}">
       </div>
+      <div></div>
     </div>
     <label>Download folder</label>
     <input type="text" value="{{ music_dir }}" disabled>

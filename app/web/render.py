@@ -9,7 +9,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from ..db import counts_by_status
+from .. import catalog
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -28,7 +28,7 @@ templates.env.filters["filesize"] = _fmt_size
 
 
 def render(request: Request, template: str, **context: Any) -> HTMLResponse:
-    counts = counts_by_status()
+    counts = catalog.counts()
     base = {
         "request": request,
         "active": "",
