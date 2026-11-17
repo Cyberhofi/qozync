@@ -16,7 +16,9 @@ dependencies = [
     "cryptography>=42.0",
     # Bandcamp fingerprints TLS; curl_cffi impersonates a real browser to avoid
     # being blocked (bundles its own patched libcurl in the wheel).
-    "curl_cffi>=0.7",
+    # Pinned <0.17: curl_cffi 0.17.0 regressed cookie attachment — cookies set on
+    # the session are not sent, so Bandcamp returns an (unauthenticated) HTML page.
+    "curl_cffi>=0.16,<0.17",
 ]
 
 [project.optional-dependencies]
