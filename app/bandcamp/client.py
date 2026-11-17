@@ -190,7 +190,9 @@ class BandcampClient:
     def _stream(self, url: str, dest: Path) -> int:
         tmp = dest.with_suffix(dest.suffix + ".part")
         written = 0
-        with self._s.get(url, stream=True) as resp:
+        # curl_cffi's streaming Response is not a context manager — get → iterate → close.
+        resp = self._s.get(url, stream=True)
+        try:
             resp.raise_for_status()
             ctype = resp.headers.get("content-type", "")
             # A real file is an attachment; an HTML body means "still preparing".
@@ -203,6 +205,8 @@ class BandcampClient:
                     if chunk:
                         fh.write(chunk)
                         written += len(chunk)
+        finally:
+            resp.close()
         tmp.replace(dest)
         return written
 
