@@ -28,6 +28,20 @@ from .models import BandcampPurchase
 BASE = "https://bandcamp.com"
 _PAGEDATA_RE = re.compile(r'<div id="pagedata" data-blob="([^"]+)"')
 
+# Control chars silently break cookie attachment. A decoded Bandcamp identity
+# cookie contains literal tabs; browsers send them percent-encoded (%09).
+_CTRL = {chr(i) for i in range(32)} | {chr(127)}
+
+
+def normalize_identity(value: str) -> str:
+    """Clean a pasted identity cookie: drop an ``identity=`` prefix / quotes and
+    percent-encode control characters so it attaches and is sent correctly."""
+    v = value.strip()
+    if v.lower().startswith("identity="):
+        v = v[len("identity="):]
+    v = v.strip().strip('"').strip("'")
+    return "".join(f"%{ord(c):02X}" if c in _CTRL else c for c in v)
+
 # Format fallbacks if the preferred one isn't offered for an item.
 _FORMAT_FALLBACKS = ["flac", "alac", "wav", "mp3-320", "mp3-v0", "vorbis"]
 _EXT = {
@@ -74,7 +88,20 @@ class BandcampClient:
         if not identity.strip():
             raise BandcampAuthError("no Bandcamp identity cookie provided")
         self._s = cffi.Session(impersonate="chrome", timeout=60)
-        self._s.cookies.set("identity", identity.strip(), domain=".bandcamp.com")
+        self._s.cookies.set("identity", normalize_identity(identity), domain=".bandcamp.com")
+
+    def _json(self, resp, what: str):
+        """Parse a JSON API response, turning a login/HTML page into a clear error."""
+        if "json" not in resp.headers.get("content-type", ""):
+            raise BandcampAuthError(
+                f"Bandcamp returned a login page instead of {what} — the identity cookie "
+                "wasn't accepted. Re-copy the full 'identity' cookie value; if your browser "
+                "shows it decoded, copy the URL-encoded form (it contains %09 tabs)."
+            )
+        try:
+            return resp.json()
+        except Exception:
+            raise BandcampError(f"Bandcamp sent an unreadable {what} response")
 
     # -- pagedata helper -----------------------------------------------------
     def _pagedata(self, url: str) -> dict[str, Any]:
@@ -91,10 +118,13 @@ class BandcampClient:
     def get_fan(self) -> tuple[str, str]:
         """Return (fan_id, username). Raises if the cookie isn't a logged-in fan."""
         resp = self._s.get(f"{BASE}/api/fan/2/collection_summary")
-        if resp.status_code in (401, 403):
-            raise BandcampAuthError("identity cookie is invalid or expired")
         resp.raise_for_status()
-        data = resp.json()
+        data = self._json(resp, "your account")
+        if data.get("error"):
+            raise BandcampAuthError(
+                f"Bandcamp: {data.get('error_message', 'must be logged in')} "
+                "— the identity cookie is invalid or expired."
+            )
         fan_id = data.get("fan_id")
         summary = data.get("collection_summary") or {}
         username = summary.get("username") or ""
@@ -124,7 +154,7 @@ class BandcampClient:
                 json={"fan_id": int(fan_id), "older_than_token": token, "count": 100},
             )
             resp.raise_for_status()
-            data = resp.json()
+            data = self._json(resp, "your collection")
             redownloads.update(data.get("redownload_urls") or {})
             items = data.get("items") or []
             for raw in items:
